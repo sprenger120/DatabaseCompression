@@ -7,6 +7,7 @@
 
 /*this is the include for the example compressed column with empty implementation*/
 #include <compression/dictionary_compressed_column.hpp>
+#include <compression/runtime_compressed_column.h>
 
 #include  "unittest.hpp"
 
@@ -15,23 +16,27 @@ using namespace CoGaDB;
 int main(){
 	/*Adapt the Column to your implemented method*/
             std::cout <<"Dic: "<< std::endl;
-	if(!unittest<Column, int>()){
-		std::cout << "At least one Unittest Failed!" << std::endl;	
+	if(!unittest<DictionaryCompressedColumn, int>()){
+		std::cerr << "At least one Unittest Failed!" << std::endl;
 		return -1;	
 	}
 	std::cout << "Unitests Passed!" << std::endl;
 
-	if(!unittest<Column,float>()){
-		std::cout << "At least one Unittest Failed!" << std::endl;	
+	if(!unittest<DictionaryCompressedColumn,float>()){
+		std::cerr << "At least one Unittest Failed!" << std::endl;
 		return -1;	
 	}
 	std::cout << "Unitests Passed!" << std::endl;
 
-	if(!unittest<Column ,std::string>()){
-		std::cout << "At least one Unittest Failed!" << std::endl;	
+	if(!unittest<DictionaryCompressedColumn ,std::string>()){
+		std::cerr << "At least one Unittest Failed!" << std::endl;
 		return -1;	
 	}
 	std::cout << "Unitests Passed!" << std::endl;
+
+
+
+
 
 //	/****** BULK UPDATE TEST ******/
 //	{
