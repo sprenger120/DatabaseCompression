@@ -64,6 +64,7 @@ private:
     void __insertSurrogate(std::vector<uint32_t>& target, uint32_t value,
                            uint32_t tid, uint8_t entrysize) const;
     void _insertSurrogate(uint32_t value);
+    uint32_t _intPow(uint32_t x,uint32_t p) const;
 };
 
 
@@ -82,16 +83,16 @@ private:
 
     template<class T>
 	void DictionaryCompressedColumn<T>::_checkAndResizeSurrogates(int numNewEntries) {
-	    if (powl(2, _currSurrogateBitSize)-1 > _surrogateEntries + numNewEntries) {
+	    if (_dictionary.size() + numNewEntries < _intPow(2, _currSurrogateBitSize)-1) {
 	        return;
 	    }
 
         uint8_t newSurrogateSize = static_cast<uint8_t>(
-                ceil(log2(static_cast<double>(_surrogateEntries + numNewEntries))));
+                ceil(log2(static_cast<double>(_dictionary.size() + numNewEntries)))) + 1;
 
 
 
-	    std::vector<uint32_t> newSurrogates;
+	    std::vector<uint32_t> newSurrogates(_surrogates.size());
         for (uint32_t tid = 0;tid<_surrogateEntries;++tid) {
             __insertSurrogate(newSurrogates, _lookupInSurrogates(tid), tid, newSurrogateSize);
         }
@@ -101,35 +102,43 @@ private:
 	}
 
     template<class T>
+    uint32_t DictionaryCompressedColumn<T>::_intPow(uint32_t x, const uint32_t p) const {
+        if (p == 0) return 1;
+        if (p == 1) return x;
+        return x * _intPow(x, p-1);
+    }
+
+    template<class T>
     constexpr uint32_t DictionaryCompressedColumn<T>::_bitMask(const uint32_t size) const {
         uint32_t v = 0;
         for(uint32_t i = 0;i<size;++i){
-            v |= 1;
             v <<=1;
+            v |= 1;
         }
         return v;
     }
 
     template<class T>
     uint32_t DictionaryCompressedColumn<T>::_lookupInSurrogates(uint32_t tid) const {
-        uint64_t bitAddress = (tid * _currSurrogateBitSize);
-        uint8_t bitIndex = bitAddress%32;
-        uint32_t byteAddress = bitAddress/32;
+        uint64_t bitAddressStart = tid * _currSurrogateBitSize;
+        uint64_t bitAddressEnd = ((tid+1) * _currSurrogateBitSize)-1;
+        uint32_t byteAddressStart = bitAddressStart/32;
+        uint32_t byteAddressEnd = bitAddressEnd/32;
 
-        if (byteAddress >= _surrogates.size()) {
-            throw std::runtime_error("surrogates out of bounds");
+        uint8_t bitStartIndex = bitAddressStart%32;
+
+        if (byteAddressEnd >= _surrogates.size()) {
+            throw std::runtime_error("out of range");
         }
 
         // split between entry and previous one?
-        bool split = bitAddress % 32 < _currSurrogateBitSize;
-
-        if (!split) {
-            return (_surrogates[byteAddress] & (_bitMask(_currSurrogateBitSize)<<bitIndex)) >> bitIndex;
+        if (byteAddressStart == byteAddressEnd) {
+            return (_surrogates[byteAddressStart] & (_bitMask(_currSurrogateBitSize)<<bitStartIndex))>>bitStartIndex;
         } else {
-            uint64_t temp = (static_cast<uint64_t>(_surrogates[byteAddress])<<32) |
-                    static_cast<uint64_t>(_surrogates[byteAddress-1]);
-            bitIndex = 32-(_currSurrogateBitSize-bitIndex);
-            return (temp & (static_cast<uint64_t>(_bitMask(_currSurrogateBitSize))<<bitIndex)) >> bitIndex;
+            uint64_t temp = static_cast<uint64_t>(_surrogates[byteAddressStart]) |
+                            (static_cast<uint64_t>(_surrogates[byteAddressEnd])<<32);
+
+            return (temp & (static_cast<uint64_t>(_bitMask(_currSurrogateBitSize))<<bitStartIndex))>>bitStartIndex;
         }
     }
 
@@ -137,31 +146,30 @@ private:
     void DictionaryCompressedColumn<T>::__insertSurrogate(std::vector<uint32_t>& target, uint32_t value,
             uint32_t tid, uint8_t entrysize) const
     {
-        uint64_t bitAddress = (tid * entrysize);
-        uint8_t bitIndex = bitAddress%32;
-        uint32_t byteAddress = bitAddress/32;
+        uint64_t bitAddressStart = tid * entrysize;
+        uint64_t bitAddressEnd = ((tid+1) * entrysize)-1;
+        uint32_t byteAddressStart = bitAddressStart/32;
+        uint32_t byteAddressEnd = bitAddressEnd/32;
 
-        if (byteAddress >= target.size()) {
+        uint8_t bitStartIndex = bitAddressStart%32;
+
+        if (byteAddressEnd >= target.size()) {
             target.emplace_back(0);
         }
 
         // split between entry and previous one?
-        bool split = bitAddress % 32 < entrysize;
-
-        if (!split) {
-            target[byteAddress] &= ~(_bitMask(entrysize)<<(bitIndex));
-            target[byteAddress] |= (value<<bitIndex);
+        if (byteAddressStart == byteAddressEnd) {
+            target.at(byteAddressStart) &= ~(_bitMask(entrysize)<<(bitStartIndex));
+            target.at(byteAddressStart) |= (value<<bitStartIndex);
         } else {
-            uint64_t temp = (static_cast<uint64_t>(target[byteAddress])<<32) |
-                            static_cast<uint64_t>(target[byteAddress-1]);
+            uint64_t temp = static_cast<uint64_t>(target.at(byteAddressStart)) |
+                    (static_cast<uint64_t>(target.at(byteAddressEnd))<<32);
 
-            bitIndex = 32-(entrysize-bitIndex);
+            temp &= ~(static_cast<uint64_t>(_bitMask(entrysize))<<bitStartIndex);
+            temp |= (static_cast<uint64_t>(value)<<bitStartIndex);
 
-            temp &= ~(_bitMask(entrysize)<<(bitIndex));
-            temp |= (value<<bitIndex);
-
-            target[byteAddress] = static_cast<uint32_t>(temp>>32);
-            target[byteAddress-1] = static_cast<uint32_t>(temp&32);
+            target[byteAddressStart] = static_cast<uint32_t>(temp);
+            target[byteAddressEnd] = static_cast<uint32_t>(temp>>32);
         }
     }
 
@@ -196,11 +204,12 @@ private:
 	    }
 
 	    if (!found) {
-	        _dictionary.emplace_back(value);
+	        _dictionary.push_back(value);
             dictIndex = _dictionary.size()-1;
 	    }
 
 	    // add surrogate
+        _checkAndResizeSurrogates(1);
         _insertSurrogate(dictIndex);
 
 		return true;
@@ -239,9 +248,9 @@ private:
 
 	template<class T>
 	void DictionaryCompressedColumn<T>::print() const throw(){
-
+        std::cout<<"printing: "<<this->name_<<"\n";
 	    for(uint32_t tid=0;tid<_surrogateEntries;++tid) {
-	        std::cout<<"tid= "<<tid<<"\tvalue="<<_dictionary[_lookupInSurrogates(tid)];
+	        std::cout<<"tid= "<<tid<<"\tvalue="<<_dictionary[_lookupInSurrogates(tid)]<<"\n";
 	    }
 	}
 
@@ -350,14 +359,22 @@ private:
         //std::cout << "Writing Column " << this->getName() << " to File " << path << std::endl;
         std::ofstream outfile (path.c_str(),std::ios_base::binary | std::ios_base::out);
 
-        outfile<<_surrogateEntries;
-        outfile<<_surrogates.size();
-        for(const auto & e : _surrogates) {
-            outfile<<e;
+        uint32_t dictSize = _dictionary.size();
+        uint32_t surrSize = _surrogates.size();
+        uint8_t typeSize = sizeof(T);
+
+        outfile.write(reinterpret_cast<char*>(&_surrogateEntries), 4);
+        outfile.write(reinterpret_cast<char*>(&_currSurrogateBitSize), 4);
+        outfile.write(reinterpret_cast<char*>(&surrSize), 4);
+        outfile.write(reinterpret_cast<char*>(&typeSize), 1);
+
+        for(auto & e : _surrogates) {
+            outfile.write(reinterpret_cast<char*>(&e), 4);
         }
-        outfile<<_dictionary.size();
-        for(const auto & e : _dictionary) {
-            outfile<<e;
+
+        outfile.write(reinterpret_cast<char*>(&dictSize), 4);
+        for(auto & e : _dictionary) {
+            outfile.write(reinterpret_cast<char*>(&e), typeSize);
         }
 
 
@@ -368,29 +385,36 @@ private:
 	template<class T>
 	bool DictionaryCompressedColumn<T>::load(const std::string& path_){
         std::string path(path_);
-        //std::cout << "Loading column '" << this->name_ << "' from path '" << path << "'..." << std::endl;
+        std::cout << "Loading column '" << this->name_ << "' from path '" << path << "'..." << std::endl;
         //string path("data/");
         path += "/";
         path += this->name_;
 
         //std::cout << "Opening File '" << path << "'..." << std::endl;
         std::ifstream infile (path.c_str(),std::ios_base::binary | std::ios_base::in);
-        boost::archive::binary_iarchive ia(infile);
 
         uint32_t surrogateListSize = 0, dictionarySize = 0;
-        ia >> _surrogateEntries;
-        ia >> surrogateListSize;
+        uint8_t typeSize;
+        T entry;
+        uint32_t ientry;
+
+
+        infile.read(reinterpret_cast<char*>(&_surrogateEntries), 4);
+        infile.read(reinterpret_cast<char*>(&_currSurrogateBitSize), 4);
+        infile.read(reinterpret_cast<char*>(&surrogateListSize), 4);
+        infile.read(reinterpret_cast<char*>(&typeSize), 1);
 
         _surrogates.resize(surrogateListSize);
-        for(uint32_t i=0;i<surrogateListSize;++i) {
-            ia >> _surrogates[i];
+        for(auto & e : _surrogates) {
+            infile.read(reinterpret_cast<char*>(&ientry), 4);
+            e = ientry;
         }
 
-        ia >>dictionarySize;
+        infile.read(reinterpret_cast<char*>(&dictionarySize), 4);
         _dictionary.resize(dictionarySize);
-
-        for(uint32_t i=0;i<dictionarySize;++i) {
-            ia >> _dictionary[i];
+        for(auto & e : _dictionary) {
+            infile.read(reinterpret_cast<char*>(&entry), typeSize);
+            e = entry;
         }
 
         infile.close();
