@@ -7,7 +7,7 @@
 
 /*this is the include for the example compressed column with empty implementation*/
 #include <compression/dictionary_compressed_column.hpp>
-#include <compression/runtime_compressed_column.h>
+#include <compression/bitvector_compressed_column.h>
 
 #include  "unittest.hpp"
 
@@ -15,7 +15,8 @@ using namespace CoGaDB;
 
 int main(){
 	/*Adapt the Column to your implemented method*/
-            std::cout <<"Dic: "<< std::endl;
+
+	std::cout <<"Dic: "<< std::endl;
 	if(!unittest<DictionaryCompressedColumn, int>()){
 		std::cerr << "At least one Unittest Failed!" << std::endl;
 		return -1;	
@@ -35,6 +36,29 @@ int main(){
 		return -1;	
 	}
 	std::cout << "Unitests Passed!" << std::endl;
+
+
+    std::cout <<"Dic: "<< std::endl;
+    if(!unittest<BitvectorCompressedColumn, int>()){
+        std::cerr << "At least one Unittest Failed!" << std::endl;
+        return -1;
+    }
+    std::cout << "Unitests Passed!" << std::endl;
+
+
+    if(!unittest<BitvectorCompressedColumn,float>()){
+        std::cerr << "At least one Unittest Failed!" << std::endl;
+        return -1;
+    }
+    std::cout << "Unitests Passed!" << std::endl;
+
+
+    if(!unittest<BitvectorCompressedColumn ,std::string>()){
+        std::cerr << "At least one Unittest Failed!" << std::endl;
+        return -1;
+    }
+    std::cout << "Unitests Passed!" << std::endl;
+
 
 
 //	/****** BULK UPDATE TEST ******/

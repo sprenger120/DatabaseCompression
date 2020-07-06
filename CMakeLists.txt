@@ -24,7 +24,7 @@ add_executable(Db2
         doc/documentation.hpp
         base_column.cpp
         main.cpp
-        unittest.hpp compression/runtime_compressed_column.h)
+        unittest.hpp compression/bitvector_compressed_column.h)
 
 target_link_libraries(Db2
         ${Boost_LIBRARIES})
