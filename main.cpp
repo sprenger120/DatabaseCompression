@@ -30,14 +30,11 @@ int main(){
 	std::cout << "Unitests Passed!" << std::endl;
 
 
-	/*if(!unittest<DictionaryCompressedColumn ,std::string>()){
+	if(!unittest<DictionaryCompressedColumn ,std::string>()){
 		std::cerr << "At least one Unittest Failed!" << std::endl;
 		return -1;	
 	}
 	std::cout << "Unitests Passed!" << std::endl;
-*/
-
-
 
 
 //	/****** BULK UPDATE TEST ******/

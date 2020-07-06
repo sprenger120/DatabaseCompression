@@ -382,6 +382,40 @@ private:
         outfile.close();
         return true;
 	}
+
+    template<>
+    bool DictionaryCompressedColumn<std::string>::store(const std::string& path_){
+        //string path("data/");
+        std::string path(path_);
+        path += "/";
+        path += this->name_;
+        //std::cout << "Writing Column " << this->getName() << " to File " << path << std::endl;
+        std::ofstream outfile (path.c_str(),std::ios_base::binary | std::ios_base::out);
+
+        uint32_t dictSize = _dictionary.size();
+        uint32_t surrSize = _surrogates.size();
+
+        outfile.write(reinterpret_cast<char*>(&_surrogateEntries), 4);
+        outfile.write(reinterpret_cast<char*>(&_currSurrogateBitSize), 4);
+        outfile.write(reinterpret_cast<char*>(&surrSize), 4);
+
+        for(auto & e : _surrogates) {
+            outfile.write(reinterpret_cast<char*>(&e), 4);
+        }
+
+        outfile.write(reinterpret_cast<char*>(&dictSize), 4);
+        for(auto & e : _dictionary) {
+            uint32_t size = e.size();
+            outfile.write(reinterpret_cast<char*>(&size), 4);
+            outfile.write(e.c_str(), e.size());
+        }
+
+
+        outfile.flush();
+        outfile.close();
+        return true;
+    }
+
 	template<class T>
 	bool DictionaryCompressedColumn<T>::load(const std::string& path_){
         std::string path(path_);
@@ -420,6 +454,50 @@ private:
         infile.close();
 		return true;
 	}
+    template<>
+    bool DictionaryCompressedColumn<std::string>::load(const std::string& path_){
+        std::string path(path_);
+        std::cout << "Loading column '" << this->name_ << "' from path '" << path << "'..." << std::endl;
+        //string path("data/");
+        path += "/";
+        path += this->name_;
+
+        //std::cout << "Opening File '" << path << "'..." << std::endl;
+        std::ifstream infile (path.c_str(),std::ios_base::binary | std::ios_base::in);
+
+        uint32_t surrogateListSize = 0, dictionarySize = 0;
+        uint32_t ientry;
+
+
+        infile.read(reinterpret_cast<char*>(&_surrogateEntries), 4);
+        infile.read(reinterpret_cast<char*>(&_currSurrogateBitSize), 4);
+        infile.read(reinterpret_cast<char*>(&surrogateListSize), 4);
+
+        _surrogates.resize(surrogateListSize);
+        for(auto & e : _surrogates) {
+            infile.read(reinterpret_cast<char*>(&ientry), 4);
+            e = ientry;
+        }
+
+        infile.read(reinterpret_cast<char*>(&dictionarySize), 4);
+        _dictionary.resize(dictionarySize);
+        for(auto & e : _dictionary) {
+            infile.read(reinterpret_cast<char*>(&ientry), 4);
+            char* buffer = new char[ientry+1];
+            buffer[ientry] = 0;
+
+            infile.read(buffer, ientry);
+            e = buffer;
+            delete [] buffer;
+        }
+
+        infile.close();
+        return true;
+    }
+
+
+
+
 
 	template<class T>
 	T& DictionaryCompressedColumn<T>::operator[](const int tid){
