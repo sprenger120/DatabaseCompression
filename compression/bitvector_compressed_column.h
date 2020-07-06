@@ -1,3 +1,5 @@
+// Michael Albrecht & Patrick Mrech
+
 #pragma once
 
 #include <core/compressed_column.hpp>

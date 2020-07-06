@@ -1,4 +1,4 @@
-
+// Michael Albrecht & Patrick Mrech
 /*! \example dictionary_compressed_column.hpp
  * This is an example of how to implement a compression technique in our framework. One has to inherit from an abstract base class CoGaDB::CompressedColumn and implement the pure virtual methods.
  */
